@@ -61,13 +61,6 @@ newalbum = raw_input('Skip or type in correct ALBUM name: ')
 if newalbum != '':
     album = newalbum
 
-# make dirs
-if not os.path.isdir(musicdir + interpret):
-    os.mkdir(musicdir + interpret)
-albumdir = musicdir + interpret + '/' + album
-if not os.path.isdir(albumdir):
-    os.mkdir(albumdir)
-
 #  Extract and write track list
 description = re.search('eow-description.+</div>', html).group(0)
 lines = re.split('<br />', description)
@@ -118,6 +111,13 @@ print trackparms
 #
 #  Download the album and convert it to mp3
 #
+# make dirs
+if not os.path.isdir(musicdir + interpret):
+    os.mkdir(musicdir + interpret)
+albumdir = musicdir + interpret + '/' + album
+if not os.path.isdir(albumdir):
+    os.mkdir(albumdir)
+# download
 urlq = '"' + url + '"'
 os.system('youtube-dl --extract-audio --audio-format mp3 --audio-quality 0 '
           + urlq + ' -o "' + albumdir + '/albumraw.tmp"')
@@ -140,5 +140,6 @@ for i in range(1, len(trackparms) + 1):
                   starttime + ' ' + '9999.00' + ' -o ' + outpath +
                   ' -g [@a="' + interpret + '",@b="' + album + '",' +
                   '@t="' + track + '",@n="' + str(i) + '"]')
+# remove raw file
 if raw_input('Remove raw album? [Y/n]: ') in ['', 'Y', 'y']:
     os.system('rm "' + albumdir + '/albumraw.mp3"')
