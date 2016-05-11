@@ -14,13 +14,13 @@ from urllib import urlopen
 
 musicdir = os.path.expanduser('~/Music/')
 
-# Get URL from command argument
+# Get URL from 1. either from command argument
 if len(sys.argv) > 1:
     url = sys.argv[1]
 if len(sys.argv) > 2:
     musicdir = sys.argv[2]
 
-# Get URL from clipboard
+# or 2. from clipboard
 try:
     # Python2
     import Tkinter as tk
@@ -29,7 +29,6 @@ except ImportError:
     import tkinter as tk
 root = tk.Tk()
 # keep the window from showing
-
 root.withdraw()
 c = root.clipboard_get()
 if urlparse(c).netloc == 'www.youtube.com':
@@ -39,80 +38,83 @@ if urlparse(c).netloc == 'www.youtube.com':
 #  Extract Information from YouTube page
 #
 html = urlopen(url).read()
+# get title section
 videotitlesec = re.search('watch-title"\s.+>', html).group(0)
-
 videotitle = re.search('title=".+">', videotitlesec).group(0)[7:-2]
+# get title
 videotitle = re.sub(
-    '\s?\(?([Nn]ew\s)?[Ff]ull\s[Aa]lbum\s?\)?', '', videotitle, re.IGNORECASE)
+    '\s?\*?\(?([Nn]ew\s)?[Ff]ull\s?[Aa]lbum\*?\)?\s?', '', videotitle, re.IGNORECASE)
 titlesplits = re.split('\s?[-|\xe2\x80\x8e\xe2\x80\x93]\s?', videotitle)
 if len(titlesplits) > 1:
-
     interpret, album = titlesplits[0], titlesplits[1]
 else:
     interpret = 'N/A'
-
     album = 'N/A'
 print '\n' + 'Interpreter: ' + interpret
-# if raw_input('Correct? [Y/n]: ') in ['N','n']:
 
+# if wrong, correct interpreter and album
 newinterp = raw_input('Skip or type in correct INTERPRETER: ')
 if newinterp != '':
     interpret = newinterp
-
 print '\n' + 'Album: ' + album
 newalbum = raw_input('Skip or type in correct ALBUM name: ')
 if newalbum != '':
-
     album = newalbum
-description = re.search('eow-description.+</div>', html).group(0)
-lines = re.split('<br />', description)
 
+# make dirs
 if not os.path.isdir(musicdir + interpret):
     os.mkdir(musicdir + interpret)
-
 albumdir = musicdir + interpret + '/' + album
 if not os.path.isdir(albumdir):
     os.mkdir(albumdir)
 
-#
 #  Extract and write track list
-#
-
+description = re.search('eow-description.+</div>', html).group(0)
+lines = re.split('<br />', description)
 tracklist = interpret + ' - ' + album + '\n\n'
 trackparms = []
-
 i = 1
 for line in lines:
     if 'seekTo' in line:
-
-        cline = re.sub('<([^>]*)>', '', line)
-        print '\n' + cline
-        tracklist += cline + '\n'
-
-        starttime = re.search(r'(\d+:\d+)', cline).group(0)
-        cline = re.sub(r'(\d+:\d+)', '', cline)
-        title = re.search(
-            r'[^(0%d)|^%d|^-|^.|^\s]+([A-z|0-9|\.]+\s)*' % (i, i),
-                          cline).group(0).strip()
-
-        ctitle = re.sub(r'\d+[\.\s|\s|-]+', '', title)
-        print 'Title: ' + ctitle
-
+        linesearch = re.search('>?([^<>]+)<[^<>]+>([^<>]+)(?:<[^<>]+>([^<>]+))?<?', line)
+        print linesearch.group(0)
+        print linesearch.group(1)
+        print linesearch.group(2)
+        if (linesearch.group(3) is None) or (linesearch.group(3) == ')'):
+            cline = linesearch.group(1)
+            time = linesearch.group(2)
+        else: # meaning if the timestamp is somewhere in the middle
+            cline = linesearch.group(2)
+            time = linesearch.group(3)
+        print cline
+        print time
+        timesearch = re.search(r'(?:(\d+):)?(\d+):(\d+)', time)
+        if timesearch is None: # if time and track name are interchanged...
+            time, cline = cline, time            
+            timesearch = re.search(r'(?:(\d+):)?(\d+):(\d+)', time)
+        # add hours to minutes for correct timeformat for mp3splt       
+        hours_ = timesearch.group(1)
+        if hours_ is not None:          
+            minutes = str(int(timesearch.group(2)) + 60*int(hours_))
+        else:
+            minutes = timesearch.group(2)
+        seconds = timesearch.group(3)
+        ctitle = re.search(r"[^%d|^(?:0%d)](\w(?:(\w\-\w|[\w\.'&])*\s?)+)" % (i, i),   
+                          cline).group(1).strip()
+        print '\nTrack Description: ' + cline        
+        print 'Estimated Title  : ' + ctitle
         newtitle = raw_input('Skip or type in correct title: ')
         if newtitle != '':
             ctitle = newtitle
-
-        print 'Starttime: ' + starttime
+        print 'Time Stamp         : ' + time
+        print 'Estimated Starttime: ' + minutes + ':' + seconds
         newtime = raw_input('Skip or type in correct starttime "mm:ss": ')
         if newtime != '':
-
-            starttime = newtime
-        minutes = re.sub(r':\d+', '', starttime)
-        seconds = re.sub(r'\d+:', '', starttime)
-
+            minutes = re.sub(r':\d+', '', newtime)
+            seconds = re.sub(r'\d+:', '', newtime)
         trackparms.append([ctitle, minutes, seconds])
+        tracklist += ctitle + ' ' + minutes + ':' + seconds + '\n'
         i += 1
-
 tracklist_file = open(albumdir + '/tracklist.txt', 'w')
 tracklist_file.write(tracklist)
 tracklist_file.close()
@@ -121,34 +123,27 @@ print trackparms
 #
 #  Download the album and convert it to mp3
 #
-
 urlq = '"' + url + '"'
 os.system('youtube-dl --extract-audio --audio-format mp3 --audio-quality 0 '
-
           + urlq + ' -o "' + albumdir + '/albumraw.tmp"')
+
 #
 #  Split the album into different tracks
 #
-
 for i in range(1, len(trackparms) + 1):
     track = trackparms[i - 1][0]
-
     starttime = str(trackparms[i - 1][1]) + '.' + str(trackparms[i - 1][2])
     outpath = '"' + interpret + ' - (' + str(i) + ') ' + track + '"'
     if i < len(trackparms):
-
         stoptime = str(trackparms[i][1]) + '.' + str(trackparms[i][2]) + ' '
         os.system('mp3splt "' + albumdir + '/albumraw.mp3"' + ' ' +
                   starttime + ' ' + stoptime + '-o ' + outpath +
-
                   ' -g [@a="' + interpret + '",@b="' + album + '",' +
                   '@t="' + track + '",@n="' + str(i) + '"]')
     else:
-
         os.system('mp3splt "' + albumdir + '/albumraw.mp3"' + ' ' +
                   starttime + ' ' + '9999.00' + ' -o ' + outpath +
                   ' -g [@a="' + interpret + '",@b="' + album + '",' +
-
                   '@t="' + track + '",@n="' + str(i) + '"]')
 if raw_input('Remove raw album? [Y/n]: ') in ['', 'Y', 'y']:
     os.system('rm "' + albumdir + '/albumraw.mp3"')
