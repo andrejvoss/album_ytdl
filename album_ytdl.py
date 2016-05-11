@@ -77,17 +77,12 @@ i = 1
 for line in lines:
     if 'seekTo' in line:
         linesearch = re.search('>?([^<>]+)<[^<>]+>([^<>]+)(?:<[^<>]+>([^<>]+))?<?', line)
-        print linesearch.group(0)
-        print linesearch.group(1)
-        print linesearch.group(2)
         if (linesearch.group(3) is None) or (linesearch.group(3) == ')'):
             cline = linesearch.group(1)
             time = linesearch.group(2)
         else: # meaning if the timestamp is somewhere in the middle
             cline = linesearch.group(2)
             time = linesearch.group(3)
-        print cline
-        print time
         timesearch = re.search(r'(?:(\d+):)?(\d+):(\d+)', time)
         if timesearch is None: # if time and track name are interchanged...
             time, cline = cline, time            
